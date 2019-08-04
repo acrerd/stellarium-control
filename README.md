@@ -9,4 +9,5 @@ To do:
  - send serial messages to QP reflecting the slew command received from Stellarium
  - receive pointing data from QP and relay it back to Stellarium for the graticule
  - gui allowing tracking on/off and up/down/left/right nudges to check the pointing offsets
- - auto startup and shutdown eith Stellarium
+ - auto startup and shutdown with Stellarium
+ - simple full control with remote stellarium: tracking always on.  If alt<0 then stow.

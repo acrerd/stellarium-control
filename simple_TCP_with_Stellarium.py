@@ -1,6 +1,5 @@
-
 #Talking to Stellarium through a tcp socket.
-#Install telescope control on Stellarium
+#Install telescope control on Stellarium 
 #In config, choose:
 #    telescope controlled by external software
 #    name: SRT
@@ -19,7 +18,6 @@ import socket, select
 import numpy as np
 import serial
 
-
 from astropy import units as u
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz
@@ -29,17 +27,22 @@ from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 
 ser = serial.Serial('/dev/ttyACM1',19200, timeout=1)
 
-def send(s):
+def send(s): # send a command to qp
     ser.write(s+'\n')
     print("to qp: " + s)
     return
 
+def update_cursor(ra,dec): # sets the stellarium cursor, in radians
+    imy_ra = int(ra*0x80000000/np.pi)
+    imy_dec = int(dec*0x80000000/np.pi)
+    reply = struct.pack("3iIii", 24, 0, data[2], imy_ra, imy_dec, 0)
+    i.send(reply)
 
 #Acre Road Obeservatory
 acre_lat = 55.9024278*u.degree
 acre_lon = -4.307582/180*u.degree
 
-Acre_Road = EarthLocation(lat=acre_lat.to(u.radian), lon=acre_lon.to(u.radian), height=50*u.m)
+Acre_Road = EarthLocation(lat=acre_lat, lon=acre_lon, height=50*u.m)
 # Home position
 oaz = 22.0*u.degree
 oalt = 3.0*u.degree
@@ -54,6 +57,7 @@ while not home:
      line = ser.readline()
      if  line.split(' ')[0] == '#home:':
           home = True
+          print("telescope homed")
      print("from qp: "+line)
 
 open_sockets = []
@@ -63,7 +67,7 @@ listening_socket.bind( ("", 10002) ) # port number
 listening_socket.listen(5)
 
 time = Time.now()
-home_pos = AltAz(oalt,oaz,obstime=time,location=Acre_Road)
+home_pos = AltAz(oaz,oalt,obstime=time,location=Acre_Road)
 goto_ra = SkyCoord(home_pos).icrs.ra
 goto_dec = SkyCoord(home_pos).icrs.dec
 c = SkyCoord(ra=goto_ra.to(u.radian), dec=goto_dec.to(u.radian), frame='icrs')
@@ -91,18 +95,16 @@ while True:
     if track:
         time = Time.now()
         c_altaz = c.transform_to(AltAz(obstime=time,location=Acre_Road))
-   #     print("Alt = {0.alt:.5}   Az = {0.az:.5}".format(c_altaz))
+   #     print("Alt = {0.alt:.5}   Az = {0.az:.5}".format(c_altaz)) 
         send('gh'  + ' %.5f' % c_altaz.az.to(u.radian).value + ' %.5f' % c_altaz.alt.to(u.radian).value)
 
 # see that qp has to say for itself
         for line in ser.readlines():
              print("from qp: "+line)
-
-# send cursor data back to stellarium
-        my_ra = goto_ra
-        my_dec = goto_dec
-        imy_ra = int(my_ra*0x80000000/np.pi)
-        imy_dec = int(my_dec*0x80000000/np.pi)
-        reply = struct.pack("3iIii", 24, 0, data[2], imy_ra, imy_dec, 0)
-        i.send(reply)
+             if (line.split()[0] == '>g') and (line.split()[1] == 'A'):
+                 time = Time.now()
+                 current_pos = AltAz(float(line.split()[2])*u.radian ,float(line.split()[3])*u.radian,obstime=time,location=Acre_Road)
+                 my_ra = SkyCoord(current_pos).icrs.ra
+                 my_dec = SkyCoord(current_pos).icrs.dec
+                 update_cursor(my_ra.to(u.radian).value, my_dec.to(u.radian).value)
 
